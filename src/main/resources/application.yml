@@ -1,0 +1,37 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:3005}/${DB_NAME:kronohealth}
+    username: ${DB_USERNAME:kronouser}
+    password: ${DB_PASSWORD:kronopass}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 30000
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+
+  flyway:
+    enabled: false
+
+server:
+  port: 8080
+  servlet:
+    context-path: /
+
+app:
+  cors:
+    allowed-origins:
+      - "http://localhost:4200"
+
+logging:
+  level:
+    root: INFO
+    com.kronohealth: INFO
+    org.hibernate.SQL: WARN
