@@ -1,8 +1,8 @@
 spring:
   datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:kronohealth}
-    username: ${DB_USERNAME:kronouser}
-    password: ${DB_PASSWORD:kronopass}
+    url: jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 10
@@ -28,24 +28,37 @@ spring:
     enabled: false
 
 server:
-  port: 8080
+  port: ${SERVER_PORT}
   servlet:
     context-path: /
 
 app:
   cors:
     allowed-origins:
-      - "http://localhost:4200"
+      - ${APP_CORS_ORIGIN}
 
   jwt:
-    secret: ${JWT_SECRET:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
-    expiration: ${JWT_EXPIRATION:86400000}
+    secret: ${JWT_SECRET}
+    expiration: ${JWT_EXPIRATION}
 
   s3:
-    endpoint: ${S3_ENDPOINT:http://localhost:9000}
-    access-key: ${S3_ACCESS_KEY:admin}
-    secret-key: ${S3_SECRET_KEY:password123}
-    bucket: ${S3_BUCKET:kronohealth-documents}
+    endpoint: ${S3_ENDPOINT}
+    access-key: ${S3_ACCESS_KEY}
+    secret-key: ${S3_SECRET_KEY}
+    bucket: ${S3_BUCKET}
+
+  openai:
+    api-key: ${GROQ_API_KEY}
+    model: ${GROQ_MODEL}
+    base-url: ${GROQ_BASE_URL}
+
+  analysis:
+    async:
+      core-pool-size: 2
+      max-pool-size: 5
+      queue-capacity: 100
+    pdf:
+      max-chars: 15000
 
 springdoc:
   api-docs:
@@ -55,7 +68,6 @@ springdoc:
     tags-sorter: alpha
     operations-sorter: alpha
     display-request-duration: true
-
 
 logging:
   level:

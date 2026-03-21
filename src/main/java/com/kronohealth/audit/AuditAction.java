@@ -5,6 +5,7 @@ package com.kronohealth.audit;
  */
 public enum AuditAction {
     UPLOAD,
-    DELETE
+    DELETE,
+    ANALYZE
 }
 

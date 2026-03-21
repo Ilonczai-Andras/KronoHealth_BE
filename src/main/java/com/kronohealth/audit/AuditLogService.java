@@ -49,6 +49,22 @@ public class AuditLogService {
         log.info("AUDIT: {} deleted '{}' ({})", user.getEmail(), document.getFileName(), document.getId());
     }
 
+    @Transactional
+    public void logAnalyze(User user, Document document) {
+        AuditLog entry = AuditLog.builder()
+                .userId(user.getId())
+                .userEmail(user.getEmail())
+                .userName(user.getName())
+                .action(AuditAction.ANALYZE)
+                .documentId(document.getId())
+                .fileName(document.getFileName())
+                .fileSize(document.getFileSize())
+                .build();
+
+        auditLogRepository.save(entry);
+        log.info("AUDIT: {} triggered analysis for '{}' ({})", user.getEmail(), document.getFileName(), document.getId());
+    }
+
     @Transactional(readOnly = true)
     public List<AuditLogResponse> getMyAuditLogs(UUID userId) {
         return auditLogRepository.findByUserIdOrderByTimestampDesc(userId)
