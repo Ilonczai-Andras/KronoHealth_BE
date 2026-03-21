@@ -17,7 +17,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/v1/documents")
 @RequiredArgsConstructor
-@Tag(name = "Document Analysis", description = "AI-powered PDF → structured JSON medical data extraction")
+@Tag(name = "Document Analysis", description = "AI-powered PDF → structured JSON medical data extraction & review")
 public class AnalysisController {
 
     private final AnalysisService analysisService;
@@ -50,5 +50,16 @@ public class AnalysisController {
     public ResponseEntity<DocumentAnalysisResponse> getAnalysis(@PathVariable UUID id) {
         return ResponseEntity.ok(analysisService.getAnalysis(id));
     }
-}
 
+    /**
+     * Updates the analysis result with corrections from the user.
+     * Returns the updated result, including any validation warnings.
+     */
+    @PatchMapping("/{id}/analysis")
+    @Operation(summary = "Correct AI-extracted data")
+    public ResponseEntity<DocumentAnalysisResponse> patchAnalysis(
+            @PathVariable UUID id,
+            @RequestBody MedicalReportPatchRequest request) {
+        return ResponseEntity.ok(analysisService.patch(id, request));
+    }
+}

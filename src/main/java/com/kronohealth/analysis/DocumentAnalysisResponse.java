@@ -16,22 +16,24 @@ public record DocumentAnalysisResponse(
         UUID id,
         UUID documentId,
         AnalysisStatus status,
-        /** Raw JSON of MedicalReport – present only when status = COMPLETED. */
         @JsonRawValue String result,
-        /** Present only when status = FAILED. */
         String errorMessage,
         Instant createdAt,
-        Instant analyzedAt
+        Instant analyzedAt,
+        Instant reviewedAt,
+        UUID reviewedByUserId
 ) {
     public static DocumentAnalysisResponse from(DocumentAnalysis analysis) {
         return new DocumentAnalysisResponse(
                 analysis.getId(),
                 analysis.getDocumentId(),
                 analysis.getStatus(),
-                analysis.getResultJson(),       // null-safe – already a JSON string
+                analysis.getResultJson(),
                 analysis.getErrorMessage(),
                 analysis.getCreatedAt(),
-                analysis.getAnalyzedAt()
+                analysis.getAnalyzedAt(),
+                analysis.getReviewedAt(),
+                analysis.getReviewedByUserId()
         );
     }
 }

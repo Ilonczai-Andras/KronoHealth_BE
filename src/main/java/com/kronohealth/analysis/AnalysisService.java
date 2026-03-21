@@ -1,5 +1,6 @@
 package com.kronohealth.analysis;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kronohealth.audit.AuditLogService;
 import com.kronohealth.document.Document;
 import com.kronohealth.document.DocumentService;
@@ -17,14 +18,6 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import java.time.Instant;
 import java.util.UUID;
 
-/**
- * Orchestrates document AI analysis:
- * <ul>
- *   <li>Validates document ownership via {@link DocumentService}</li>
- *   <li>Creates / resets the {@link DocumentAnalysis} record</li>
- *   <li>Delegates the heavy work to {@link AnalysisAsyncRunner} (runs in a separate thread)</li>
- * </ul>
- */
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -35,6 +28,9 @@ public class AnalysisService {
     private final AnalysisAsyncRunner asyncRunner;
     private final AuditLogService auditLogService;
     private final UserRepository userRepository;
+    private final ObjectMapper objectMapper;
+
+    // ── Trigger / Poll ───────────────────────────────────────────────────
 
     /**
      * Triggers an AI analysis for the given document.
@@ -72,18 +68,51 @@ public class AnalysisService {
         return DocumentAnalysisResponse.from(analysis);
     }
 
+    // ── Doctor review ────────────────────────────────────────────────────
+
+    /**
+     * Applies the doctor's corrections to the AI result.
+     * Merges the patch on top of the existing MedicalReport, saves it,
+     * stamps reviewedAt, and runs medical validation on the corrected data.
+     */
+    @Transactional
+    public DocumentAnalysisResponse patch(UUID documentId, MedicalReportPatchRequest req) {
+        User user = getAuthenticatedUser();
+        Document document = documentService.getDocument(documentId);
+
+        DocumentAnalysis analysis = analysisRepository.findByDocumentId(documentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Elemzés nem található: " + documentId));
+
+        if (analysis.getStatus() != AnalysisStatus.COMPLETED) {
+            throw new IllegalStateException("Csak COMPLETED státuszú elemzés szerkeszthető");
+        }
+
+        MedicalReport merged = merge(parseReport(analysis.getResultJson()), req);
+        try {
+            analysis.setResultJson(objectMapper.writeValueAsString(merged));
+        } catch (Exception e) {
+            throw new RuntimeException("Nem sikerült a javított adatot menteni", e);
+        }
+        analysis.setReviewedAt(Instant.now());
+        analysis.setReviewedByUserId(user.getId());
+        analysisRepository.save(analysis);
+
+        auditLogService.logReview(user, document);
+        log.info("Analysis {} reviewed by {}", analysis.getId(), user.getEmail());
+
+        return DocumentAnalysisResponse.from(analysis);
+    }
+
     // ── Private helpers ──────────────────────────────────────────────────
 
     private DocumentAnalysisResponse handleExisting(DocumentAnalysis existing, Document document) {
         if (existing.getStatus() == AnalysisStatus.COMPLETED
                 || existing.getStatus() == AnalysisStatus.PENDING
                 || existing.getStatus() == AnalysisStatus.PROCESSING) {
-            log.debug("Analysis already exists with status {} for doc {}", existing.getStatus(), document.getId());
             return DocumentAnalysisResponse.from(existing);
         }
 
         // FAILED → reset and re-run
-        log.info("Re-running failed analysis for doc {}", document.getId());
         existing.setStatus(AnalysisStatus.PENDING);
         existing.setErrorMessage(null);
         existing.setResultJson(null);
@@ -105,19 +134,12 @@ public class AnalysisService {
                 .build();
 
         analysis = analysisRepository.save(analysis);
-        log.info("Created analysis record {} for doc {}", analysis.getId(), document.getId());
-
         scheduleAfterCommit(analysis.getId(), document.getS3Key(), document.getFileName());
         auditLogService.logAnalyze(getAuthenticatedUser(), document);
 
         return DocumentAnalysisResponse.from(analysis);
     }
 
-    /**
-     * Registers the async job to start only AFTER the current transaction commits.
-     * This prevents the "record not found" race condition where the async thread
-     * starts before the DocumentAnalysis row is visible in the database.
-     */
     private void scheduleAfterCommit(UUID analysisId, String s3Key, String fileName) {
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
@@ -127,10 +149,36 @@ public class AnalysisService {
         });
     }
 
+    /** Applies non-null patch fields on top of the existing report. */
+    private MedicalReport merge(MedicalReport base, MedicalReportPatchRequest req) {
+        if (base == null) base = new MedicalReport();
+        if (req.documentType()  != null) base.setDocumentType(req.documentType());
+        if (req.issuedDate()    != null) base.setIssuedDate(req.issuedDate());
+        if (req.facilityName()  != null) base.setFacilityName(req.facilityName());
+        if (req.physicianName() != null) base.setPhysicianName(req.physicianName());
+        if (req.patientInfo()   != null) base.setPatientInfo(req.patientInfo());
+        if (req.labResults()    != null) base.setLabResults(req.labResults());
+        if (req.diagnoses()     != null) base.setDiagnoses(req.diagnoses());
+        if (req.medications()   != null) base.setMedications(req.medications());
+        if (req.clinicalNotes() != null) base.setClinicalNotes(req.clinicalNotes());
+        if (req.summary()       != null) base.setSummary(req.summary());
+        return base;
+    }
+
+    private MedicalReport parseReport(String json) {
+        if (json == null) return null;
+        try {
+            return objectMapper.readValue(json, MedicalReport.class);
+        } catch (Exception e) {
+            log.warn("Could not parse resultJson: {}", e.getMessage());
+            return null;
+        }
+    }
+
+
     private User getAuthenticatedUser() {
         String email = SecurityContextHolder.getContext().getAuthentication().getName();
         return userRepository.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("Felhasználó nem található"));
     }
 }
-

@@ -49,5 +49,13 @@ public class DocumentAnalysis {
     /** Timestamp when COMPLETED or FAILED state was reached. */
     @Column(name = "analyzed_at")
     private Instant analyzedAt;
+
+    /** Set when a doctor manually reviews and/or corrects the result. */
+    @Column(name = "reviewed_at")
+    private Instant reviewedAt;
+
+    /** UUID of the User who last reviewed the result. */
+    @Column(name = "reviewed_by_user_id")
+    private UUID reviewedByUserId;
 }
 
