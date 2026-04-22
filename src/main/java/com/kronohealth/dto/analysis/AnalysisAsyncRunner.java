@@ -3,6 +3,8 @@ package com.kronohealth.dto.analysis;
 import com.kronohealth.entity.AnalysisStatus;
 import com.kronohealth.entity.DocumentAnalysis;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.kronohealth.repository.DocumentRepository;
+import com.kronohealth.service.AnalysisEventService;
 import com.kronohealth.service.StorageService;
 import com.kronohealth.repository.DocumentAnalysisRepository;
 import com.kronohealth.service.AiAnalysisService;
@@ -42,6 +44,8 @@ public class AnalysisAsyncRunner {
     private final PdfTextExtractorService pdfExtractor;
     private final AiAnalysisService aiAnalysisService;
     private final ObjectMapper objectMapper;
+    private final AnalysisEventService analysisEventService;
+    private final DocumentRepository documentRepository;
 
     @Async("aiAnalysisExecutor")
     public void run(UUID analysisId, String s3Key, String fileName) {
@@ -89,6 +93,7 @@ public class AnalysisAsyncRunner {
             a.setResultJson(resultJson);
             a.setAnalyzedAt(Instant.now());
             analysisRepository.save(a);
+            fireEvent(a);
         });
     }
 
@@ -99,7 +104,21 @@ public class AnalysisAsyncRunner {
             a.setErrorMessage(errorMessage);
             a.setAnalyzedAt(Instant.now());
             analysisRepository.save(a);
+            fireEvent(a);
         });
+    }
+
+    private void fireEvent(DocumentAnalysis a) {
+        documentRepository.findById(a.getDocumentId()).ifPresent(doc ->
+                analysisEventService.sendAnalysisEvent(
+                        doc.getUserId(),
+                        a.getId(),
+                        a.getDocumentId(),
+                        a.getStatus(),
+                        a.getAnalyzedAt(),
+                        a.getErrorMessage()
+                )
+        );
     }
 
     private String truncate(String msg, int max) {
