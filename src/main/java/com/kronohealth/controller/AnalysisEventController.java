@@ -1,8 +1,6 @@
 package com.kronohealth.controller;
 
 import com.kronohealth.entity.User;
-import com.kronohealth.exception.ResourceNotFoundException;
-import com.kronohealth.repository.UserRepository;
 import com.kronohealth.service.AnalysisEventService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -32,7 +30,6 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 public class AnalysisEventController {
 
     private final AnalysisEventService analysisEventService;
-    private final UserRepository userRepository;
 
     @GetMapping(value = "/events", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     @Operation(
@@ -57,9 +54,7 @@ public class AnalysisEventController {
                     """
     )
     public SseEmitter subscribeToAnalysisEvents(Authentication authentication) {
-        User user = userRepository.findByEmail(authentication.getName())
-                .orElseThrow(() -> new ResourceNotFoundException("Felhasználó nem található"));
-
+        User user = (User) authentication.getPrincipal();
         return analysisEventService.subscribe(user.getId());
     }
 }

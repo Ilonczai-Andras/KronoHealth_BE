@@ -12,6 +12,8 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
+import jakarta.servlet.http.HttpServletResponse;
+import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -144,9 +146,18 @@ public class GlobalExceptionHandler {
     }
 
     /* ── Általános, nem kezelt kivétel (500) ───────────────────────────── */
+    @ExceptionHandler(IOException.class)
+    public ResponseEntity<Void> handleIo(IOException ex, HttpServletResponse response) {
+        log.debug("IOException on response (likely SSE client disconnect): {}", ex.getMessage());
+        return null;
+    }
 
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<ApiError> handleGeneric(Exception ex) {
+    public ResponseEntity<ApiError> handleGeneric(Exception ex, HttpServletResponse response) {
+        if (response.isCommitted()) {
+            log.debug("Exception after response already committed (SSE teardown), ignoring: {}", ex.getMessage());
+            return null;
+        }
         log.error("Unhandled exception: {}", ex.getMessage(), ex);
 
         ApiError error = ApiError.builder()

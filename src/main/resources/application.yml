@@ -5,11 +5,12 @@ spring:
     password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
     hikari:
-      maximum-pool-size: 10
+      maximum-pool-size: 20
       minimum-idle: 2
       connection-timeout: 30000
 
   jpa:
+    open-in-view: false
     hibernate:
       ddl-auto: update
     show-sql: false

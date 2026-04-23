@@ -8,6 +8,8 @@ import com.kronohealth.entity.User;
 import com.kronohealth.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,6 +32,10 @@ public class DocumentService {
     private final AuditLogService auditLogService;
     private final StorageService storageService;
 
+    @Lazy
+    @Autowired
+    private AnalysisService analysisService;
+
     @Transactional
     public DocumentResponse upload(MultipartFile file, String description) {
         User user = getAuthenticatedUser();
@@ -45,7 +51,7 @@ public class DocumentService {
             throw new IllegalArgumentException("A fájl mérete nem haladhatja meg a 10 MB-ot");
         }
 
-        // ── Metaadatok mentése DB-be (s3Key még üres placeholder) ──────
+        // ── Metaadatok mentése DB-be ──────
         UUID documentId = UUID.randomUUID();
         String s3Key = user.getId() + "/" + documentId + "_" + file.getOriginalFilename();
 
@@ -68,6 +74,9 @@ public class DocumentService {
         // ── Audit log bejegyzés ────────────────────────────────────────
         auditLogService.logUpload(user, document);
 
+        // ── Automatikus AI elemzés indítása ────────────────────────────
+        analysisService.triggerAnalysis(document.getId());
+
         return DocumentResponse.from(document);
     }
 
@@ -83,9 +92,6 @@ public class DocumentService {
         return doc;
     }
 
-    /**
-     * Fájl tartalmának letöltése MinIO-ból.
-     */
     public InputStream downloadContent(Document document) {
         return storageService.download(document.getS3Key());
     }
@@ -109,14 +115,11 @@ public class DocumentService {
             throw new org.springframework.security.access.AccessDeniedException("Nincs jogosultság a dokumentumhoz");
         }
 
-        // ── Törlés MinIO-ból, majd DB-ből ──────────────────────────────
         storageService.delete(doc.getS3Key());
         documentRepository.delete(doc);
         auditLogService.logDelete(user, doc);
         log.info("PDF deleted from MinIO: {} (key={}) by user {}", doc.getFileName(), doc.getS3Key(), user.getId());
     }
-
-    // ── Helper ─────────────────────────────────────────────────────────
 
     private User getAuthenticatedUser() {
         String email = SecurityContextHolder.getContext().getAuthentication().getName();
